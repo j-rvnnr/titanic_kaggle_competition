@@ -9,6 +9,7 @@ from sklearn.metrics import accuracy_score, classification_report
 from sklearn.preprocessing import LabelEncoder
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import SimpleImputer, IterativeImputer
+from sklearn.model_selection import GridSearchCV
 
 
 pd.set_option('display.max_rows', None)
@@ -117,6 +118,13 @@ if plots == 1:
     # show the plot
     plt.show()
 
+# print missings
+print("Missing values in df (training set):")
+print(df.isnull().sum())
+print("\nMissing values in df_test (test set):")
+print(df_test.isnull().sum())
+
+
 
 # engineering small features, family size
 df['Familysize'] = df['SibSp'] + df['Parch']
@@ -156,6 +164,13 @@ title_mapping = {
     'Capt': 'male_professional'
 }
 
+# count the doctors, we want to know if it's relevant
+num_dr_train = df['Title'].str.count('Dr').sum()
+num_dr_test = df_test['Title'].str.count('Dr').sum()
+
+print(f'Train Drs:{num_dr_train}')
+print(f'Test Drs:{num_dr_test}')
+
 # apply the updated title mapping
 df['TitleCat'] = df['Title'].map(title_mapping)
 df_test['TitleCat'] = df_test['Title'].map(title_mapping)
@@ -183,7 +198,7 @@ df['AgeGroup'] = pd.cut(df['Age'], bins=[0, 12, 18, 35, 60, 100],
 df_test['AgeGroup'] = pd.cut(df_test['Age'], bins=[0, 12, 18, 35, 60, 100],
                              labels=['Child', 'Teen', 'Young Adult', 'Adult', 'Senior'])
 
-# we have the survival rate for each embarkation point, we can use the pre calculated number on the test set to see if it helps
+# pre calculated survival rate: we can see if it helps, might not
 embarked_survival_rate = df.groupby('Embarked')['Survived'].mean()
 df['EmbarkedSurvivalRate'] = df['Embarked'].map(embarked_survival_rate)
 df_test['EmbarkedSurvivalRate'] = df_test['Embarked'].map(embarked_survival_rate)
@@ -198,7 +213,7 @@ if stat_anal == 1:
         correlation, p_value = spearmanr(non_null_data['Survived'], non_null_data[column])
         print(f"Spearman correlation between 'Survived' and '{column}': {correlation:.3f} (p-value: {p_value:.3f})")
 
-    columns_cat = ['Pclass', 'Sex', 'CabinDeck', 'Embarked', 'Title', 'TitleCat',
+    columns_cat = ['Pclass', 'Sex', 'Cabin', 'CabinDeck', 'Embarked', 'Title', 'TitleCat',
                    'IsAlone', 'AgeGroup']
 
     for column in columns_cat:
@@ -209,7 +224,7 @@ if stat_anal == 1:
         print(f"Kruskal-Wallis test for 'Survived' and '{column}': H-statistic = {stat:.3f}, p-value = {p_value:.3f}")
 
 
-
+# pre process the data.
 # imputation
 columns_for_impute = df.columns.difference(['Age', 'Survived'])
 
@@ -224,17 +239,6 @@ df_test[columns_for_impute] = mode_imputer.transform(df_test[columns_for_impute]
 df['Age'] = age_imputer.fit_transform(df[['Age']])
 df_test['Age'] = age_imputer.transform(df_test[['Age']])
 
-
-
-# print missings
-print("Missing values in df (training set):")
-print(df.isnull().sum())
-print("\nMissing values in df_test (test set):")
-print(df_test.isnull().sum())
-
-# gradient boost tree model
-
-
 # encode categorical variables
 label_encoders = {}
 for column in ['Sex', 'Embarked', 'TitleCat', 'CabinDeck', 'AgeGroup']:
@@ -243,34 +247,58 @@ for column in ['Sex', 'Embarked', 'TitleCat', 'CabinDeck', 'AgeGroup']:
     df_test[column] = le.transform(df_test[column].astype(str))
     label_encoders[column] = le
 
+# print missings
+print("Missing values in df (training set):")
+print(df.isnull().sum())
+print("\nMissing values in df_test (test set):")
+print(df_test.isnull().sum())
+
+
+
+# gradient boost tree model
+
+# create a parameter grid for the grid search
+param_grid = {
+    'n_estimators': range(30, 151, 5),
+    'max_depth': range(1, 8),
+    'learning_rate': [0.01, 0.05, 0.1, 0.2]
+}
+
+
 # select features and target variable for training
 features = ['Pclass', 'Sex', 'Fare', 'Familysize',
             'Embarked', 'TitleCat', 'AgeGroup']
 
 X = df[features]
+X_test = df_test[features]
 y = df['Survived']
 
 # split into training and testing sets
 X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=117)
 
-# create the gradient boost model, and train it
-model = GradientBoostingClassifier(n_estimators=30, learning_rate=0.1, max_depth=3, random_state=117)
-model.fit(X_train, y_train)
+# create the gradient boost model, and prepare the grid search
+model = GradientBoostingClassifier(random_state=117)
+grid_search = GridSearchCV(estimator=model, param_grid=param_grid,
+                           cv=5, scoring='accuracy', n_jobs=-1, verbose=0)
+
+# perform the grid search and print the best parameters
+grid_search.fit(X_train, y_train)
+print(f"Best parameters: {grid_search.best_params_}")
+print(f"Best cross-validation accuracy: {grid_search.best_score_}")
 
 # validate the model
-y_pred = model.predict(X_val)
+best_model = grid_search.best_estimator_
+y_pred = best_model.predict(X_val)
+
+# print the validation
 print(f"Validation Accuracy: {accuracy_score(y_val, y_pred)}")
-print(classification_report(y_val, y_pred))
 print(classification_report(y_val, y_pred))
 
 # predict on the test set
-X_test = df_test[features]
-df_test['Survived'] = model.predict(X_test)
+df_test['Survived'] = best_model.predict(X_test)
 
 # show the first few predictions
 print(df_test[['Survived']].head())
-
-
 
 # create submission
 submission = df_test[['PassengerId', 'Survived']]
