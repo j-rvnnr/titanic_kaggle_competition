@@ -27,21 +27,26 @@ a good first step is data exploration. First thing I do is to print the head of 
 So among the other information we have, we can see that the training set contains an extra column which is not present in the test set; Survived. This is the column we are predicting so this makes sense.  We also have the sex, age, SibSp (siblings or spouses) and Parch (parents or children) denoting how many people the passenger is travelling with. We also have Class, Cabin, Fare and Embarked. I suspect Ticket number will not correlate to survival chance, but we shall see. 
 
 Another important part of EDA (exploratory data analysis) is to determine how much of the dataset is missing or null values. 
-![[Pasted image 20240825212522.png]]
+
+![Pasted image 20240825212522](https://github.com/user-attachments/assets/d89532a3-c7f6-4be7-a761-005a9794f8ec)
+
 Most of the data is present, however cabin has a significant number of missing entries. This could be because Cabins were only assigned to the wealthiest passengers, or perhaps not recorded for many passengers. Age and embarkation also have a few missing values, but we can fix this later. 
 
 ## Visualising relationships
 ### Gender
 We've all seen titanic, right? We know about women and children first, right? My first thought is, do women have a higher general survival rate than men?
+
 ![Figure_1](https://github.com/user-attachments/assets/000e11a8-2135-41d9-8508-7045cc16df58)
 
 It looks like they do! This graph is unsatisfying though, as many more men travelled than women, by the looks of things. We want to turn this into a ratio, in order to clear up what's going on here. 
+
 ![Figure_2](https://github.com/user-attachments/assets/a7fa2359-7bc9-418e-a194-ffa499872ef4)
 
 Perfect, we have rescaled this data to show exactly what we want to see. 
 
 ### Age
 Next up, lets look at age. We start by looking at a histogram of the ages, by survived and died:
+
 ![survival_by_age](https://github.com/user-attachments/assets/c8a43567-f8ac-4903-89e2-738b460121b2)
 
 wow, that's not as helpful as I thought, although it does appear that people at the ends of the spectrum are more likely to survive.
@@ -52,6 +57,7 @@ While these plots are helpful for visualising what is going on here, a more stat
 The Spearman test provides us with a correlation coefficient, which gives us the strength of a monotonic relationship, as well as their direction. The null hypothesis is that there is no correlation. For the categorical variables (embarkation, sex as examples) we will use the Kruskal-Wallis test. This test doesn't give a correlation coefficient like the Spearman test, as it instead tests whether the values have different distributions. The test statistic denotes how different these distributions are, and the p value 
 
 If the p-value of any of these tests are below 0.05, then we can say that the null hypothesis is disproved, and therefore, there is statistical significance. Basically, when it comes to p value, low number = good. 
+
 ![Pasted image 20240824211455](https://github.com/user-attachments/assets/f7133f15-a3ae-4296-92e3-aad8eb0eae4f)
 
 Spearman Correlation shows Age is not correlative, however we know this is probably because it's not monotonic, i.e. it doesn't improve chances linearly, since low age and high age people are more likely to survive. The fact that the men and women have drastically different survival chances may also have something to do with this. From the categorical variables, only cabin seems to have a non significant effect. We have class in with the categorical variables because it's an ordinal variable, which the KW test can handle well. 
@@ -61,9 +67,11 @@ our next step is going to be feature engineering. That is taking features we alr
 
 ### Title Category
 The first feature we create is title, a good way to separate more wealthy passengers from poorer ones (in theory). We use a regex to extract the titles:
+
 ![Pasted image 20240824211455](https://github.com/user-attachments/assets/797719a1-7937-478a-b9b0-bf87738e21b2)
 
 giving us 17 unique titles. We are going to separate them into 6 groups, Standard, Professional and Aristocracy, each for men and women. The idea is to separate men and women into richer and poorer passengers, as we know that there is a difference between survival rates in the data.
+
 ![Pasted image 20240825205219](https://github.com/user-attachments/assets/73186dd6-78aa-4b70-90a7-b8d21ea99104)
 
 We have made a single assumption here, that all doctors are male. This is probably not true at all, but there are only 10 doctors in the whole data, so it probably won't matter a lot. If we wanted to get into the nitty gritty we could separate them based on the recorded gender of the passenger, but that is probably not necessary.
@@ -77,6 +85,7 @@ Our goal here is to introduce a number of other features which can help with our
 - Cabin Deck: we take the first letter from each cabin, and assume it corresponds to a deck. Perhaps if you're closer to a lifeboat you're more likely to escape?
 
 Afterwards, we do another round of Kruskal-Wallis and Spearman testing to determine if any of our new features are statistically significant. We can then discard any features that are not significant, and proceed with the next step.
+
 ![Pasted image 20240825213350](https://github.com/user-attachments/assets/14a1d451-76dc-4f6a-883b-a7aaa4972032)
 
 We also have to remember to apply the feature engineering to the test set, not just the training set, in order to keep our variables consistent across the two datasets. 
@@ -98,7 +107,10 @@ In past work I've done, the gradient boosted trees method has performed very wel
 ## Grid search
 one thing we will be doing in order to improve our accuracy, is a grid search over the hyperparameters. We will change the number of trees, the depth and the learning rate. We are choosing a wide range for these, as the whole learning process is completed in less than one second, so we can crunch out a heap of them, very quickly.
 
-Once we've split the training data into further training and test sets, we run the model for all the parameters we've given, and let the machine do it's work. We find that 110 estimators, with 0.1 learning rate and a max depth of 4 gives us the best results. We apply that version of the model to the test set, and end up with our final prediction file, which we submit to kaggle. ![[Pasted image 20240825224711.png]]
+Once we've split the training data into further training and test sets, we run the model for all the parameters we've given, and let the machine do it's work. We find that 110 estimators, with 0.1 learning rate and a max depth of 4 gives us the best results. We apply that version of the model to the test set, and end up with our final prediction file, which we submit to kaggle.
+
+![Pasted image 20240825224711](https://github.com/user-attachments/assets/4ea1e602-bb8c-4bc9-b78e-6ece77541829)
+
 This gives us a score of 0.79%, which for a single afternoons work, isn't as terrible as it could be. 
 
 # 4 - Final thoughts
